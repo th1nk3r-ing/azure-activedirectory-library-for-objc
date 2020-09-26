@@ -21,8 +21,6 @@
 #import "UIApplication+ADExtensions.h"
 #import "ADAuthenticationContext.h"
 #import "ADAuthenticationDelegate.h"
-#import "ADAuthenticationWebViewController.h"
-#import "ADAuthenticationViewController.h"
 #import "ADAuthenticationBroker.h"
 #import "ADAuthenticationSettings.h"
 #import "ADNTLMHandler.h"
@@ -40,9 +38,7 @@ NSString *const AD_IPHONE_STORYBOARD = @"ADAL_iPhone_Storyboard";
 @implementation ADAuthenticationBroker
 {
     UIViewController* parentController;
-    ADAuthenticationViewController    *_authenticationViewController;
-    ADAuthenticationWebViewController *_authenticationWebViewController;
-    
+
     BOOL                               _ntlmSession;
     NSLock                             *_completionLock;
     
@@ -191,9 +187,7 @@ correlationId:(NSUUID *)correlationId
     THROW_ON_NIL_ARGUMENT(correlationId);
     THROW_ON_NIL_ARGUMENT(completionBlock)
     //AD_LOG_VERBOSE(@"Authorization", startURL.absoluteString);
-    
-    startURL = [self addToURL:startURL correlationId:correlationId];//Append the correlation id
-    
+
     // Save the completion block
     _completionBlock = [completionBlock copy];
     ADAuthenticationError* error = nil;
@@ -206,23 +200,11 @@ correlationId:(NSUUID *)correlationId
     
     if (webView)
     {
-        AD_LOG_INFO(@"Authorization UI", @"Use the application provided WebView.");
-        // Use the application provided WebView
-        _authenticationWebViewController = [[ADAuthenticationWebViewController alloc] initWithWebView:webView startAtURL:startURL endAtURL:endURL];
-        
-        if ( _authenticationWebViewController )
-        {
-            // Show the authentication view
-            _authenticationWebViewController.delegate = self;
-            [_authenticationWebViewController start];
-        }
-        else
-        {
+
             // Dispatch the completion block
             error = [ADAuthenticationError errorFromAuthenticationError:AD_ERROR_MISSING_RESOURCES
                                                            protocolCode:nil
                                                            errorDetails:AD_FAILED_NO_RESOURCES];
-        }
     }
     else
     {
@@ -235,35 +217,10 @@ correlationId:(NSUUID *)correlationId
         if (parent)
         {
             parentController = parent;
-            // Load our resource bundle, find the navigation controller for the authentication view, and then the authentication view
-            UINavigationController *navigationController = [[self.class storyboard:&error] instantiateViewControllerWithIdentifier:@"LogonNavigator"];
-            
-            if (navigationController)
-            {
-                _authenticationViewController = (ADAuthenticationViewController *)[navigationController.viewControllers objectAtIndex:0];
-                
-                _authenticationViewController.delegate = self;
-                
-                if ( fullScreen == YES )
-                    [navigationController setModalPresentationStyle:UIModalPresentationFullScreen];
-                else
-                    [navigationController setModalPresentationStyle:UIModalPresentationFormSheet];
-                
-                // Show the authentication view
-                [parent presentViewController:navigationController animated:YES completion:^{
-                    // Instead of loading the URL immediately on completion, get the UI on the screen
-                    // and then dispatch the call to load the authorization URL
-                    dispatch_async( dispatch_get_main_queue(), ^{
-                        [_authenticationViewController startWithURL:startURL endAtURL:endURL];
-                    });
-                }];
-            }
-            else //Navigation controller
-            {
-                error = [ADAuthenticationError errorFromAuthenticationError:AD_ERROR_MISSING_RESOURCES
-                                                               protocolCode:nil
-                                                               errorDetails:AD_FAILED_NO_RESOURCES];
-            }
+
+            error = [ADAuthenticationError errorFromAuthenticationError:AD_ERROR_MISSING_RESOURCES
+                                                           protocolCode:nil
+                                                           errorDetails:AD_FAILED_NO_RESOURCES];
         }
         else //Parent
         {
@@ -327,21 +284,10 @@ correlationId:(NSUUID *)correlationId
 
     ADAuthenticationError* error = [ADAuthenticationError errorFromCancellation];
     
-    if ( nil != _authenticationViewController)
-    {
-        // Dismiss the authentication view and dispatch the completion block
-        [parentController dismissViewControllerAnimated:YES completion:^{
-            [self dispatchCompletionBlock:error URL:nil];
-        }];
-    }
-    else
-    {
-        [_authenticationWebViewController stop];
+    // Dismiss the authentication view and dispatch the completion block
+    [parentController dismissViewControllerAnimated:YES completion:^{
         [self dispatchCompletionBlock:error URL:nil];
-    }
-    
-    _authenticationViewController    = nil;
-    _authenticationWebViewController = nil;
+    }];
 }
 
 // Authentication completed at the end URL
@@ -349,21 +295,10 @@ correlationId:(NSUUID *)correlationId
 {
     DebugLog();
     
-    if ( nil != _authenticationViewController)
-    {
-        // Dismiss the authentication view and dispatch the completion block
-        [parentController dismissViewControllerAnimated:YES completion:^{
-            [self dispatchCompletionBlock:nil URL:endURL];
-        }];
-    }
-    else
-    {
-        [_authenticationWebViewController stop];
+    // Dismiss the authentication view and dispatch the completion block
+    [parentController dismissViewControllerAnimated:YES completion:^{
         [self dispatchCompletionBlock:nil URL:endURL];
-    }
-    
-    _authenticationViewController    = nil;
-    _authenticationWebViewController = nil;
+    }];
 }
 
 // Authentication failed somewhere
@@ -372,21 +307,10 @@ correlationId:(NSUUID *)correlationId
     // Dispatch the completion block
     ADAuthenticationError* adError = [ADAuthenticationError errorFromNSError:error errorDetails:error.localizedDescription];
     
-    if ( nil != _authenticationViewController)
-    {
-        // Dismiss the authentication view and dispatch the completion block
-        [parentController dismissViewControllerAnimated:YES completion:^{
-            [self dispatchCompletionBlock:adError URL:nil];
-        }];
-    }
-    else
-    {
-        [_authenticationWebViewController stop];
+    // Dismiss the authentication view and dispatch the completion block
+    [parentController dismissViewControllerAnimated:YES completion:^{
         [self dispatchCompletionBlock:adError URL:nil];
-    }
-    
-    _authenticationViewController    = nil;
-    _authenticationWebViewController = nil;
+    }];
 }
 
 @end
